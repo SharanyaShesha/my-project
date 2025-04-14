@@ -1,0 +1,286 @@
+---
+title: "project"
+date: "2024-12-12"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# -------------------- Step 1: Install and Load Required Libraries --------------------
+# Install and load required packages
+#install.packages("ggcorrplot")
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+
+if (!requireNamespace("ggplot2", quietly = TRUE)) 
+
+install.packages("ggplot2")
+
+library(ggcorrplot)
+library(ggplot2)
+
+# -------------------- Step 2: Load the Dataset --------------------
+# Load the dataset
+data <- read.csv("C:\\Users\\shara\\OneDrive - Indiana University\\Applied Stats\\hypothyroid.csv", stringsAsFactors = FALSE)
+
+# -------------------- Step 3: Select Relevant Columns --------------------
+# Select relevant columns for analysis
+selected_columns <- c("age", "sex", "T3", "TSH", "TT4", "FTI", "binaryClass")
+data <- data[selected_columns]
+
+# -------------------- Step 4: Inspect the Dataset --------------------
+# Print column names
+print("Selected columns:")
+print(colnames(data))
+
+# View the first few rows of the dataset
+head(data)
+
+# -------------------- Step 5: Replace Invalid Numeric Entries with NA --------------------
+# Define numeric columns
+numeric_columns <- c("age", "T3", "TSH", "TT4", "FTI")
+
+# Convert numeric columns to numeric and replace invalid entries with NA
+for (col in numeric_columns) {
+  if (col %in% colnames(data)) {
+    data[[col]] <- as.numeric(as.character(data[[col]]))
+  }
+}
+
+# -------------------- Step 6: Replace Invalid Categorical Entries with NA --------------------
+# Define categorical columns
+categorical_columns <- c("sex", "binaryClass")
+
+# Standardize and replace invalid categorical values with NA
+for (col in categorical_columns) {
+  if (col %in% colnames(data)) {
+    data[[col]] <- tolower(trimws(data[[col]]))  # Standardize values
+    data[[col]] <- ifelse(data[[col]] %in% c("", "?", "unknown"), NA, data[[col]])  # Replace invalid entries
+  }
+}
+
+# -------------------- Step 7: Check for Missing Values --------------------
+# Check missing values in each column
+missing_values <- sapply(data, function(x) sum(is.na(x)))
+cat("Missing values count for each column:\n")
+print(missing_values)
+
+# -------------------- Step 8: Impute Missing Values --------------------
+# Numeric columns: Replace NA with column mean
+for (col in numeric_columns) {
+  if (col %in% colnames(data)) {
+    data[[col]] <- ifelse(is.na(data[[col]]), mean(data[[col]], na.rm = TRUE), data[[col]])
+  }
+}
+
+# Categorical columns: Replace NA with "unknown"
+for (col in categorical_columns) {
+  if (col %in% colnames(data)) {
+    data[[col]] <- ifelse(is.na(data[[col]]), "unknown", data[[col]])
+  }
+}
+
+# -------------------- Step 9: Save the Cleaned Dataset --------------------
+write.csv(data, "C:/Users/penta/OneDrive - Indiana University/hideens/aapld stats/hypothyroid.csv", row.names = FALSE)
+
+# -------------------- Step 10: Convert Categorical Columns to Factors --------------------
+data$binaryClass <- as.factor(data$binaryClass)
+data$sex <- as.factor(data$sex)
+
+# -------------------- Step 11: Plot Visualizations --------------------
+# Define a vector of distinct colors for histograms
+colors <- c("pink", "green", "purple", "lightblue", "brown")
+
+# Plot histograms for numeric variables
+for (i in seq_along(numeric_columns)) {
+  col <- numeric_columns[i]
+  fill_color <- colors[i]
+
+  p <- ggplot(data, aes(x = !!sym(col))) +
+    geom_histogram(binwidth = 10, fill = fill_color, color = "black", alpha = 0.7) +
+    labs(title = paste("Distribution of", col), x = col, y = "Frequency") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
+
+  # Apply x-axis limits only for the 'age' column
+  if (col == "age") {
+    p <- p + scale_x_continuous(limits = c(0, 100))
+  }
+
+  print(p)
+}
+
+# Define distinct colors for bar charts
+colors <- c("blue", "orange")
+
+# Plot bar charts for categorical variables
+for (i in seq_along(categorical_columns)) {
+  col <- categorical_columns[i]
+  fill_color <- colors[i]
+
+  c <- ggplot(data, aes(x = !!sym(col))) +
+    geom_bar(fill = fill_color, color = "black", alpha = 0.7) +
+    labs(title = paste("Count of", col), x = col, y = "Count") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
+
+  print(c)
+}
+
+# Scatterplots for numeric pairs with binaryClass differentiation
+for (i in 1:(length(numeric_columns) - 1)) {
+  for (j in (i + 1):length(numeric_columns)) {
+    if (all(c(numeric_columns[i], numeric_columns[j]) %in% colnames(data))) {
+      s <- ggplot(data, aes(x = !!sym(numeric_columns[i]), y = !!sym(numeric_columns[j]), color = binaryClass)) +
+        geom_point(alpha = 0.5, size = 2) +
+        labs(title = paste("Scatterplot of", numeric_columns[i], "vs", numeric_columns[j])) +
+        scale_color_manual(values = c("tan", "red")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5))
+
+      print(s)
+    }
+  }
+}
+
+# -------------------- Step 12: Visualize Outliers with Boxplots --------------------
+# Plot boxplots for numeric variables to detect outliers
+for (col in numeric_columns) {
+  b <- ggplot(data, aes(y = !!sym(col))) +
+    geom_boxplot(fill = "grey", outlier.colour = "red", alpha = 0.7) +
+    labs(title = paste("Boxplot for", col), y = col) +
+    theme_minimal()
+
+  print(b)
+}
+
+# -------------------- Step 13: Replace Outliers with Median --------------------
+replace_outliers <- function(x) {
+  Q1 <- quantile(x, 0.25, na.rm = TRUE)
+  Q3 <- quantile(x, 0.75, na.rm = TRUE)
+  IQR <- Q3 - Q1
+
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+
+  median_val <- median(x, na.rm = TRUE)
+  x <- ifelse(x < lower_bound | x > upper_bound, median_val, x)
+
+  return(x)
+}
+
+# Apply the function to each numeric column
+for (col in numeric_columns) {
+  data[[col]] <- replace_outliers(data[[col]])
+}
+
+summary(data)
+
+cat("Cleaned dataset with outliers replaced by median values.\n")
+
+# -------------------- Step 14: Shapiro-Wilk Test for Normality --------------------
+cat("\nShapiro-Wilk Test for Normality:\n")
+for (col in numeric_columns) {
+  p_value <- tryCatch({
+    shapiro.test(data[[col]])$p.value
+  }, error = function(e) NA)
+
+  cat(col, ": p-value =", p_value, "\n")
+}
+
+# -------------------- Step 15: Chi-Square Test --------------------
+chi_table <- table(data$sex, data$binaryClass)
+chi_test <- chisq.test(chi_table)
+
+cat("\nChi-Square Test between sex and binaryClass:\n")
+print(chi_test)
+
+# -------------------- Step 16: Mann-Whitney U Test --------------------
+results <- list()
+
+# Perform Mann-Whitney U Test for each numeric variable
+for (var in numeric_columns) {
+  formula <- as.formula(paste(var, "~ binaryClass"))
+  test_result <- wilcox.test(formula, data = data, exact = FALSE)
+
+  results[[var]] <- test_result
+}
+
+for (var in numeric_columns) {
+  cat("Mann-Whitney U Test for", var, "\n")
+  print(results[[var]])
+  cat("\n")
+}
+
+# -------------------- Step 17: Correlation Heatmap --------------------
+data_numeric <- data[numeric_columns]
+cor_matrix <- cor(data_numeric, use = "complete.obs")
+
+ggcorrplot(cor_matrix, 
+          hc.order = TRUE, 
+          type = "lower", 
+          lab = TRUE, 
+          colors = c("blue", "white", "red"),
+          title = "Heatmap of Correlations Among Numeric Predictors")
+
+# -------------------- Step 18: Machine Learning Models --------------------
+install.packages("caTools")
+install.packages("randomForest")
+library(caTools)
+library(randomForest)
+
+# Split the dataset into training and testing sets
+set.seed(123)
+split <- sample.split(data$binaryClass, SplitRatio = 0.8)
+
+train_data <- subset(data, split == TRUE)
+test_data <- subset(data, split == FALSE)
+
+cat("\nNumber of rows in training dataset:", nrow(train_data))
+cat("\nNumber of rows in testing dataset:", nrow(test_data))
+
+# Fit a Logistic Regression Model
+logistic_model <- glm(binaryClass ~ age + T3 + TSH + TT4 + FTI + sex, 
+                      data = train_data, 
+                      family = binomial)
+
+cat("\nLogistic Regression Model Summary:\n")
+summary(logistic_model)
+
+logistic_preds <- predict(logistic_model, newdata = test_data, type = "response")
+logistic_preds_class <- ifelse(logistic_preds > 0.5, 1, 0)
+
+logistic_conf_matrix <- table(test_data$binaryClass, logistic_preds_class)
+cat("\nConfusion Matrix for Logistic Regression:\n")
+print(logistic_conf_matrix)
+
+logistic_accuracy <- sum(diag(logistic_conf_matrix)) / sum(logistic_conf_matrix)
+cat("\nAccuracy for Logistic Regression:", logistic_accuracy, "\n")
+
+# Fit a Random Forest Model
+random_forest_model <- randomForest(binaryClass ~ age + T3 + TSH + TT4 + FTI + sex, 
+                                     data = train_data, 
+                                     importance = TRUE, 
+                                     ntree = 500)
+
+cat("\nRandom Forest Model Summary:\n")
+print(random_forest_model)
+
+cat("\nVariable Importance:\n")
+print(importance(random_forest_model))
+
+rf_preds <- predict(random_forest_model, newdata = test_data)
+
+rf_conf_matrix <- table(test_data$binaryClass, rf_preds)
+cat("\nConfusion Matrix for Random Forest:\n")
+print(rf_conf_matrix)
+
+rf_accuracy <- sum(diag(rf_conf_matrix)) / sum(rf_conf_matrix)
+cat("\nAccuracy for Random Forest:", rf_accuracy, "\n")
+```
+
+
+
