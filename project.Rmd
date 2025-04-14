@@ -1,5 +1,6 @@
 ---
 title: "project"
+author: "Sharanya_Sheshadri"
 date: "2024-12-12"
 output: pdf_document
 ---
